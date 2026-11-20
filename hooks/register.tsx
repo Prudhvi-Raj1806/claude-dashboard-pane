@@ -41,9 +41,13 @@ const bar = (value: number, max: number, width = 24) => {
   const n = max > 0 ? Math.round((value / max) * width) : 0
   return '█'.repeat(n) + '░'.repeat(width - n)
 }
-const stamp = () => {
+const clock = () => {
   const d = new Date()
-  return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}  ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+const dateLine = () => {
+  const d = new Date()
+  return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
 }
 
 // Parses one `node server.js --json` answer, or throws its error text.
@@ -98,23 +102,37 @@ function section(Text: any, label: string) {
   return <Text bold>{label}</Text>
 }
 
-function homeView(Box: any, Text: any, ov: Overview, sm: Summary, room: number) {
-  const attention = ov.attention.map((s: SessionView) => (
+// One chat as two lines: the title with its age, then its details dimmed beneath.
+function chatItem(Box: any, Text: any, s: SessionView, when: string, tone: { dim?: boolean; color?: string }, detail: string) {
+  return (
     <Box key={s.id} flexDirection="column">
-      {line(Box, Text, s.id, `▲ ${clip(s.title, 40)}`, ago(s.attention?.since ?? null), { color: s.attention?.kind === 'error' ? 'error' : 'warning' })}
-      <Text dimColor>{`   ${s.attention?.text ?? ''} · ${s.project}`}</Text>
+      <Box flexDirection="row" justifyContent="space-between">
+        <Text dimColor={tone.dim} color={tone.color} bold={!tone.dim}>{clip(s.title, 48)}</Text>
+        <Text dimColor>{when}</Text>
+      </Box>
+      <Text dimColor>{detail}</Text>
     </Box>
-  ))
-  const recent = ov.recent24h.slice(0, room).map((s: SessionView) =>
-    line(Box, Text, s.id, `${s.status === 'active' ? '●' : '○'} ${clip(s.title, 40)}`,
-      `${s.project} · ${shortModel(s.model)} · ${compact(s.tokens)} · ${ago(s.lastActive)}`,
-      { dim: s.status !== 'active' }),
   )
+}
+
+function homeView(Box: any, Text: any, ov: Overview, sm: Summary, room: number) {
+  const attention = ov.attention.map((s: SessionView) =>
+    chatItem(Box, Text, s, ago(s.attention?.since ?? null),
+      { color: s.attention?.kind === 'error' ? 'error' : 'warning' },
+      `   ${s.attention?.text ?? ''} · ${s.project}`),
+  )
+  const recent = ov.recent24h.slice(0, room).map((s: SessionView) =>
+    chatItem(Box, Text, s, ago(s.lastActive),
+      { dim: s.status !== 'active' },
+      `   ${s.status === 'active' ? '● running' : '○'}  ${s.project} · ${shortModel(s.model)} · ${compact(s.tokens)} tokens`),
+  )
+  const scanning = !ov.scan.complete
   return (
     <Box flexDirection="column" gap={1}>
-      {header(Box, Text, 'CLAUDE', stamp())}
+      {header(Box, Text, 'CLAUDE', dateLine())}
+      {scanning && <Text color="warning">{`Indexing transcripts ${ov.scan.done}/${ov.scan.total}…`}</Text>}
       <Box flexDirection="row" gap={3}>
-        {stat(Box, Text, 'Today', compact(sm.today.tokens), 'input + output')}
+        {stat(Box, Text, 'Today', compact(sm.today.tokens), 'tokens')}
         {stat(Box, Text, 'This week', compact(sm.thisWeek.tokens), `since ${weekLabel(sm.thisWeek.start)}`)}
         {stat(Box, Text, 'All time', compact(sm.allTime.tokens), `${sm.allTime.sessions} chats`)}
       </Box>
@@ -127,7 +145,9 @@ function homeView(Box: any, Text: any, ov: Overview, sm: Summary, room: number) 
         {section(Text, `LAST 24 HOURS · ${ov.recent24h.length}`)}
         {ov.recent24h.length === 0 && <Text dimColor>No chats in the last 24 hours.</Text>}
         {recent}
+        {ov.recent24h.length > room && <Text dimColor>{`+ ${ov.recent24h.length - room} more`}</Text>}
       </Box>
+      <Text dimColor>{`Updated ${clock()}`}</Text>
     </Box>
   )
 }
@@ -218,7 +238,8 @@ export const register: Register = (on) => {
         </Box>
       )
     }
-    const room = Math.max(4, (e.viewport?.rows ?? 30) - 18)
+    // Each chat takes three lines; keep the list inside the pane.
+    const room = Math.max(3, Math.floor(((e.viewport?.rows ?? 30) - 18) / 3))
     return homeView(Box, Text, overview, summary, room)
   })
 
