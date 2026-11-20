@@ -1,16 +1,13 @@
 #!/usr/bin/env node
 // Claude Dashboard — read-only local view of Claude transcripts in ~/.claude/projects.
-// Run:  node server.js   then open http://127.0.0.1:4317
+// Used by the Claude dashboard pane mod. Run:  node server.js --json overview
 'use strict';
-const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const readline = require('readline');
 
 const PROJECTS_DIR = process.env.CLAUDE_PROJECTS_DIR || path.join(os.homedir(), '.claude', 'projects');
-const PORT = Number(process.env.PORT) || 4317;
-const HOST = '127.0.0.1';
 const CACHE_FILE = path.join(os.homedir(), '.claude', 'dashboard-cache.json');
 const CACHE_VERSION = 1;
 const ACTIVE_MS = 5 * 60 * 1000;             // transcript written in last 5 min => active
@@ -261,6 +258,7 @@ function overview() {
     attention,
     active: views.filter((v) => v.status === 'active'),
     recent: views.slice(0, 60),
+    recent24h: views.filter((v) => now - v.lastActiveMs < 24 * 3600 * 1000).slice(0, 40),
   };
 }
 
@@ -315,50 +313,76 @@ function analytics(days) {
   };
 }
 
-// ---------- http ----------
-function send(res, obj) {
-  res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-  res.end(JSON.stringify(obj));
+// Summary for the pane: today, this week, all time, daily and weekly tokens, top chats, models.
+function summary() {
+  const now = Date.now();
+  const all = [...index.values()];
+  const top = all.filter((s) => !s.isSubagent);
+  const dayTotals = {};
+  const models = {};
+  let input = 0, output = 0, cacheRead = 0, turns = 0;
+  for (const s of all) {
+    for (const [day, b] of Object.entries(s.daily)) {
+      dayTotals[day] = (dayTotals[day] || 0) + b.input + b.output;
+      input += b.input; output += b.output; cacheRead += b.cacheRead; turns += b.turns;
+      for (const [m, mb] of Object.entries(b.models)) {
+        const x = (models[m] ||= { name: m, turns: 0, tokens: 0 });
+        x.turns += mb.turns; x.tokens += mb.input + mb.output;
+      }
+    }
+  }
+  const keyToDate = (k) => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+  const mondayOf = (d) => { const x = new Date(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return localDay(x.getTime()); };
+  const weekly = {};
+  for (const [k, v] of Object.entries(dayTotals)) {
+    const w = mondayOf(keyToDate(k));
+    weekly[w] = (weekly[w] || 0) + v;
+  }
+  const thisMonday = new Date(); thisMonday.setDate(thisMonday.getDate() - ((thisMonday.getDay() + 6) % 7));
+  const weeks = [];
+  for (let i = 11; i >= 0; i--) { const d = new Date(thisMonday); d.setDate(d.getDate() - 7 * i); weeks.push(localDay(d.getTime())); }
+  const days = [];
+  for (let i = 29; i >= 0; i--) days.push(localDay(now - i * 86400000));
+  const today = localDay(now);
+  const thisWeekKey = weeks[weeks.length - 1];
+  const topChats = top
+    .map((s) => ({
+      id: s.sessionId,
+      title: s.customTitle || s.aiTitle || s.firstPrompt || s.sessionId.slice(0, 8),
+      project: projectLabel(s.cwd),
+      tokens: s.tokens.input + s.tokens.output,
+      turns: s.assistantTurns,
+      costUSD: s.costUSD,
+      lastActive: new Date(s.mtime).toISOString(),
+    }))
+    .sort((a, b) => b.tokens - a.tokens)
+    .slice(0, 8);
+  const sessionsAll = top.length;
+  const costAll = top.reduce((sum, s) => sum + s.costUSD, 0);
+  return {
+    generatedAt: new Date(now).toISOString(),
+    today: { tokens: dayTotals[today] || 0 },
+    thisWeek: { tokens: weekly[thisWeekKey] || 0, start: thisWeekKey },
+    allTime: { tokens: input + output, input, output, cacheRead, turns, sessions: sessionsAll, costUSD: costAll },
+    daily: days.map((d) => ({ date: d, tokens: dayTotals[d] || 0 })),
+    weekly: weeks.map((w) => ({ weekStart: w, tokens: weekly[w] || 0 })),
+    topChats,
+    models: Object.values(models).sort((a, b) => b.tokens - a.tokens).slice(0, 6),
+  };
 }
 
-const server = http.createServer((req, res) => {
-  const url = new URL(req.url, `http://${HOST}`);
-  try {
-    if (url.pathname === '/api/overview') return send(res, overview());
-    if (url.pathname === '/api/analytics') {
-      const days = Math.min(365, Math.max(1, Number(url.searchParams.get('days')) || 30));
-      return send(res, analytics(days));
-    }
-    if (url.pathname === '/' || url.pathname === '/index.html') {
-      return fs.readFile(path.join(__dirname, 'index.html'), (err, data) => {
-        if (err) { res.writeHead(500); return res.end('index.html missing'); }
-        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-        res.end(data);
-      });
-    }
-    res.writeHead(404); res.end('not found');
-  } catch (e) {
-    res.writeHead(500, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ error: e.message }));
-  }
-});
-
-// One-shot mode for other hosts (the pane mod): `node server.js --json overview` or
-// `node server.js --json analytics 30`. Prints JSON to stdout and exits.
+// One-shot JSON mode for the pane mod: `node server.js --json overview` or
+// `node server.js --json analytics [days]`. Prints JSON to stdout and exits.
 const cliAt = process.argv.indexOf('--json');
 if (cliAt !== -1) {
   const what = process.argv[cliAt + 1] || 'overview';
   const days = Math.min(365, Math.max(1, Number(process.argv[cliAt + 2]) || 30));
   loadCache();
   runScan()
-    .then(() => process.stdout.write(JSON.stringify(what === 'analytics' ? analytics(days) : overview())))
+    .then(() => process.stdout.write(JSON.stringify(
+      what === 'summary' ? summary() : what === 'analytics' ? analytics(days) : overview())))
     .catch((e) => { process.stderr.write(e.message); process.exitCode = 1; });
 } else {
-  loadCache();
-  server.listen(PORT, HOST, () => {
-    console.log(`Claude dashboard: http://${HOST}:${PORT}`);
-    console.log(`Reading transcripts from: ${PROJECTS_DIR}`);
-  });
-  runScan().catch((e) => console.error('scan failed:', e.message));
-  setInterval(() => runScan().catch((e) => console.error('scan failed:', e.message)), RESCAN_MS);
+  process.stderr.write('Usage: node server.js --json overview | analytics [days]\n');
+  process.exitCode = 1;
 }

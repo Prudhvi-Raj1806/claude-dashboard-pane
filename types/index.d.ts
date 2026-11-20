@@ -30,36 +30,16 @@ export type Overview = {
   attention: SessionView[]
   active: SessionView[]
   recent: SessionView[]
+  recent24h: SessionView[]
 }
 
-export type Analytics = {
-  range: { days: number; from: string; to: string }
-  totals: {
-    sessions: number
-    turns: number
-    input: number
-    output: number
-    cacheRead: number
-    cacheWrite: number
-    costUSD: number
-    tools: number
-  }
-  daily: { date: string; sessions: number; turns: number; input: number; output: number; costUSD: number; tools: number }[]
-  models: { name: string; turns: number; input: number; output: number; cacheRead: number }[]
-  entrypoints: { name: string; sessions: number; turns: number }[]
-  projects: { name: string; sessions: number; turns: number; tokens: number }[]
-  tools: { name: string; count: number }[]
-}
-
-declare module 'claude-code' {
-  interface PluginState {
-    'claude-dashboard': {
-      overview: Overview | null
-      analytics: Analytics | null
-      view: 'home' | 'analytics'
-      days: number
-      seen: string[]
-      error: string | null
-    }
-  }
+export type Summary = {
+  generatedAt: string
+  today: { tokens: number }
+  thisWeek: { tokens: number; start: string }
+  allTime: { tokens: number; input: number; output: number; cacheRead: number; turns: number; sessions: number; costUSD: number }
+  daily: { date: string; tokens: number }[]
+  weekly: { weekStart: string; tokens: number }[]
+  topChats: { id: string; title: string; project: string; tokens: number; turns: number; costUSD: number; lastActive: string }[]
+  models: { name: string; turns: number; tokens: number }[]
 }
