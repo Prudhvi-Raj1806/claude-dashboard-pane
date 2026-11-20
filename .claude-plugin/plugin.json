@@ -1,0 +1,7 @@
+{
+  "name": "claude-dashboard-pane",
+  "version": "0.1.0",
+  "description": "Claude dashboard pane: active and recent chats, items needing your action, and daily analytics.",
+  "author": { "name": "local" },
+  "types": "./types/index.d.ts"
+}

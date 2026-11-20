@@ -1,0 +1,6 @@
+{
+  "name": "claude-dashboard-pane",
+  "owner": { "name": "Prudhvi-Raj1806" },
+  "metadata": { "description": "Claude dashboard pane mod: active and recent chats, items needing your action, and daily analytics." },
+  "plugins": [{ "name": "claude-dashboard-pane", "source": "./", "description": "Pane with Home and Analytics tabs for your Claude chats.", "version": "0.1.0" }]
+}
