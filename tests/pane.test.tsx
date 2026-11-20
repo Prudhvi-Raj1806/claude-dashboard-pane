@@ -51,7 +51,7 @@ test('the home pane lists the chat from the last 24 hours', async ($, on) => {
 
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const ui = await $.ui.mount({ ...pane('claude-dashboard'), surface: 'desktop' })
-  expect((await ui.find({ type: 'Text', text: /Test chat/ }))?.text).toContain('Test chat')
+  expect((await ui.find({ type: 'Button', text: /Test chat/ }))?.text).toContain('Test chat')
   await ui.unmount()
 })
 

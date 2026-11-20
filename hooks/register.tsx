@@ -103,11 +103,11 @@ function section(Text: any, label: string) {
 }
 
 // One chat as two lines: the title with its age, then its details dimmed beneath.
-function chatItem(Box: any, Text: any, s: SessionView, when: string, tone: { dim?: boolean; color?: string }, detail: string) {
+function chatItem(Box: any, Text: any, Button: any, onPress: () => void, s: SessionView, when: string, tone: { dim?: boolean; color?: string }, detail: string) {
   return (
     <Box key={s.id} flexDirection="column">
       <Box flexDirection="row" justifyContent="space-between">
-        <Text dimColor={tone.dim} color={tone.color} bold={!tone.dim}>{clip(s.title, 48)}</Text>
+        <Button onPress={onPress}>{clip(s.title, 48)}</Button>
         <Text dimColor>{when}</Text>
       </Box>
       <Text dimColor>{detail}</Text>
@@ -115,14 +115,20 @@ function chatItem(Box: any, Text: any, s: SessionView, when: string, tone: { dim
   )
 }
 
-function homeView(Box: any, Text: any, ov: Overview, sm: Summary, room: number) {
+// The pane cannot switch the app to another chat, so a click copies the chat's ID instead.
+function copyId($: any, id: string) {
+  void $.ui.copy({ text: id })
+  void $.ui.toast('Chat ID copied. Paste it after /resume to open the chat.')
+}
+
+function homeView(Box: any, Text: any, Button: any, $: any, ov: Overview, sm: Summary, room: number) {
   const attention = ov.attention.map((s: SessionView) =>
-    chatItem(Box, Text, s, ago(s.attention?.since ?? null),
+    chatItem(Box, Text, Button, () => copyId($, s.id), s, ago(s.attention?.since ?? null),
       { color: s.attention?.kind === 'error' ? 'error' : 'warning' },
       `   ${s.attention?.text ?? ''} · ${s.project}`),
   )
   const recent = ov.recent24h.slice(0, room).map((s: SessionView) =>
-    chatItem(Box, Text, s, ago(s.lastActive),
+    chatItem(Box, Text, Button, () => copyId($, s.id), s, ago(s.lastActive),
       { dim: s.status !== 'active' },
       `   ${s.status === 'active' ? '● running' : '○'}  ${s.project} · ${shortModel(s.model)} · ${compact(s.tokens)} tokens`),
   )
@@ -229,7 +235,7 @@ export const register: Register = (on) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: HOME }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
     await refreshIfStale($)
     if (!overview || !summary) {
       return (
@@ -240,7 +246,7 @@ export const register: Register = (on) => {
     }
     // Each chat takes three lines; keep the list inside the pane.
     const room = Math.max(3, Math.floor(((e.viewport?.rows ?? 30) - 18) / 3))
-    return homeView(Box, Text, overview, summary, room)
+    return homeView(Box, Text, Button, $, overview, summary, room)
   })
 
   on('ui.render', { component: 'Pane', requestId: ANALYTICS }, async ($, e) => {
