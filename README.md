@@ -14,13 +14,13 @@ It reads the transcripts Claude keeps in `~/.claude/projects`. It is read-only a
 At the prompt of a terminal Claude session:
 
 ```
-/plugin install claude-dashboard-pane --marketplace Prudhvi-Raj1806/claude-dashboard-pane
+/plugin install dashboard --marketplace Prudhvi-Raj1806/claude-dashboard-pane
 ```
 
 From a shell:
 
 ```
-claude plugin install claude-dashboard-pane --marketplace Prudhvi-Raj1806/claude-dashboard-pane
+claude plugin install dashboard --marketplace Prudhvi-Raj1806/claude-dashboard-pane
 ```
 
 ## Use

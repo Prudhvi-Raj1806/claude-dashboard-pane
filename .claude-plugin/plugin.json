@@ -1,5 +1,5 @@
 {
-  "name": "claude-dashboard-pane",
+  "name": "dashboard",
   "version": "0.1.0",
   "description": "Claude dashboard pane: active and recent chats, items needing your action, and daily analytics.",
   "author": { "name": "local" },

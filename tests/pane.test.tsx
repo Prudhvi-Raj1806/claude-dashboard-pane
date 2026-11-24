@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 const pane = (requestId: string) => ({
-  plugin: 'claude-dashboard-pane',
+  plugin: 'dashboard',
   component: 'Pane',
   requestId,
   props: {
@@ -40,9 +40,9 @@ const summary = {
 }
 
 test('the home pane lists the chat from the last 24 hours', async ($, on) => {
-  on('command.register', () => ({ value: { command: 'dashboard' } }))
+  on('command.register', () => ({ value: { command: 'dash' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('clock.every', () => ({ value: 0 }))
+  on('clock.every', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('process.run', (_, e) => {
     const body = e.argv.includes('overview') ? overview : summary
@@ -51,14 +51,14 @@ test('the home pane lists the chat from the last 24 hours', async ($, on) => {
 
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const ui = await $.ui.mount({ ...pane('claude-dashboard'), surface: 'desktop' })
-  expect((await ui.find({ type: 'Button', text: /Test chat/ }))?.text).toContain('Test chat')
+  expect((await ui.find({ type: 'Text', text: /Test chat/ }))?.text).toContain('Test chat')
   await ui.unmount()
 })
 
 test('the analytics pane shows the all-time total', async ($, on) => {
-  on('command.register', () => ({ value: { command: 'dashboard' } }))
+  on('command.register', () => ({ value: { command: 'dash' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('clock.every', () => ({ value: 0 }))
+  on('clock.every', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('process.run', (_, e) => {
     const body = e.argv.includes('overview') ? overview : summary
